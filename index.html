@@ -38,6 +38,7 @@
       margin-top: 8px;
       font-size: 1rem;
       color: #6b7280;
+      max-width: 560px;
     }
 
     .card {
@@ -46,15 +47,12 @@
       border-radius: 12px;
       padding: 32px;
       width: 100%;
-      max-width: 760px;
+      max-width: 820px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     }
 
-    .runbook-title {
-      font-size: 1.125rem;
-      font-weight: 600;
-      color: #111827;
-      margin-bottom: 12px;
+    .field {
+      margin-bottom: 20px;
     }
 
     .label {
@@ -67,14 +65,33 @@
       margin-bottom: 6px;
     }
 
-    textarea {
+    select {
       width: 100%;
-      height: 260px;
-      padding: 14px 16px;
+      padding: 10px 14px;
       border: 1px solid #d1d5db;
       border-radius: 8px;
       font-family: inherit;
       font-size: 0.9375rem;
+      color: #374151;
+      background: #f9fafb;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    select:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+      background: #ffffff;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.875rem;
       line-height: 1.65;
       color: #374151;
       background: #f9fafb;
@@ -89,11 +106,15 @@
       background: #ffffff;
     }
 
+    #promptArea  { height: 240px; }
+    #configArea  { height: 100px; }
+
     .actions {
       margin-top: 20px;
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
+      flex-wrap: wrap;
     }
 
     button#runBtn {
@@ -109,29 +130,26 @@
       border-radius: 8px;
       cursor: pointer;
       transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
     }
 
-    button#runBtn:hover {
-      background: #4f46e5;
-    }
-
-    button#runBtn:active {
-      transform: scale(0.97);
-    }
-
+    button#runBtn:hover  { background: #4f46e5; }
+    button#runBtn:active { transform: scale(0.97); }
     button#runBtn:disabled {
       background: #a5b4fc;
       cursor: not-allowed;
       transform: none;
     }
 
-    #status {
-      font-size: 0.875rem;
-      color: #6b7280;
+    .run-hint {
+      font-size: 0.8125rem;
+      color: #9ca3af;
+      font-style: italic;
     }
 
-    #status.success { color: #059669; }
-    #status.error   { color: #dc2626; }
+    #status              { font-size: 0.875rem; color: #6b7280; }
+    #status.success      { color: #059669; }
+    #status.error        { color: #dc2626; }
 
     footer {
       margin-top: 40px;
@@ -140,76 +158,137 @@
       text-align: center;
     }
 
-    footer a {
-      color: #6366f1;
-      text-decoration: none;
-    }
-
-    footer a:hover {
-      text-decoration: underline;
-    }
+    footer a { color: #6366f1; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
 
   <header>
-    <h1>🤖 Runbook AI (website coming soon!)</h1>
-    <p>Define a runbook and run it with the Runbook AI Chrome extension.</p>
+    <h1>🤖 Runbook AI</h1>
+    <p>Discover and share runbooks for the <a href="https://chromewebstore.google.com/detail/runbook-ai/kjbhngehjkiiecaflccjenmoccielojj" target="_blank">Runbook AI Chrome extension</a> — your AI agent for autonomous web tasks.</p>
   </header>
 
   <div class="card">
-    <div class="runbook-title">Find car listings</div>
 
-    <label class="label" for="prompt">Runbook prompt</label>
-    <textarea id="prompt">Go to www.craigslist.org, and search for "Honda Civic" in the "for sale" section. Filter the results to show only listings with prices between $8000 and $10000. Sort the listings by date and get the last 3 days' results. Cap at 10 listings.
+    <div class="field">
+      <label class="label" for="runbookSelect">Select a Runbook</label>
+      <select id="runbookSelect">
+        <option value="">-- Choose a runbook --</option>
+        <option value="craigslist-car-listings">🚗 Craigslist Car Listings</option>
+      </select>
+    </div>
 
-Run sub-task for each listing: Click the listing on the results page to view the details, and store the url, price, vin number and image. Close the listing page.
+    <div class="field">
+      <label class="label" for="promptArea">Prompt</label>
+      <textarea id="promptArea" placeholder="Select a runbook above to load its prompt…"></textarea>
+    </div>
 
-Finally, generate an HTML table summarizing all listings with columns for title (link to postUrl), price, vin, and image.</textarea>
+    <div class="field">
+      <label class="label" for="configArea">Config (JSON)</label>
+      <textarea id="configArea" placeholder="Select a runbook above to load its config…"></textarea>
+    </div>
 
     <div class="actions">
-      <button id="runBtn">▶ Run</button>
+      <button id="runBtn" disabled>▶ Run</button>
+      <span class="run-hint">When clicked, this runbook will be executed by the Runbook AI extension.</span>
       <span id="status"></span>
     </div>
+
   </div>
 
   <footer>
-    Powered by <a href="https://github.com/runbook-ai" target="_blank">Runbook AI</a>
+    Powered by <a href="https://github.com/runbook-ai" target="_blank">Runbook AI</a> &mdash;
+    <a href="https://chromewebstore.google.com/detail/runbook-ai/kjbhngehjkiiecaflccjenmoccielojj" target="_blank">Install Chrome Extension</a> &mdash;
+    Want to share your runbook? <a href="https://github.com/runbook-ai/runbook-ai.github.io" target="_blank">Send a PR</a>
   </footer>
 
   <script>
-    // Replace with your published Chrome extension ID
     const EXTENSION_ID = "kjbhngehjkiiecaflccjenmoccielojj";
 
-    async function startRunbook(prompt) {
-      return await chrome.runtime.sendMessage(EXTENSION_ID, { action: "start-runbook", prompt: prompt });
+    const runbookSelect = document.getElementById("runbookSelect");
+    const promptArea    = document.getElementById("promptArea");
+    const configArea    = document.getElementById("configArea");
+    const runBtn        = document.getElementById("runBtn");
+    const status        = document.getElementById("status");
+
+    runbookSelect.addEventListener("change", async () => {
+      const name = runbookSelect.value;
+      status.textContent = "";
+      status.className = "";
+
+      if (!name) {
+        promptArea.value = "";
+        configArea.value = "";
+        runBtn.disabled = true;
+        return;
+      }
+
+      try {
+        const [mdRes, jsonRes] = await Promise.all([
+          fetch(`runbooks/${name}.md`),
+          fetch(`runbooks/${name}.json`),
+        ]);
+        promptArea.value = mdRes.ok   ? await mdRes.text()   : "(Failed to load prompt)";
+        configArea.value = jsonRes.ok ? await jsonRes.text() : "{}";
+        runBtn.disabled = false;
+      } catch (err) {
+        console.error(err);
+        promptArea.value = "";
+        configArea.value = "";
+        status.textContent = "Failed to load runbook files.";
+        status.className = "error";
+        runBtn.disabled = true;
+      }
+    });
+
+    async function startRunbook(prompt, config) {
+      return await chrome.runtime.sendMessage(EXTENSION_ID, { action: "start-runbook", prompt, config });
     }
 
-    document.getElementById("runBtn").addEventListener("click", async () => {
-      const prompt = document.getElementById("prompt").value.trim();
-      const btn = document.getElementById("runBtn");
-      const status = document.getElementById("status");
+    runBtn.addEventListener("click", async () => {
+      const prompt = promptArea.value.trim();
 
       if (!prompt) {
-        status.textContent = "Please enter a runbook prompt.";
+        status.textContent = "Prompt is empty.";
         status.className = "error";
         return;
       }
 
-      btn.disabled = true;
+      let config = {};
+      try {
+        config = JSON.parse(configArea.value || "{}");
+      } catch (e) {
+        status.textContent = "Config JSON is invalid.";
+        status.className = "error";
+        return;
+      }
+
+      runBtn.disabled = true;
       status.textContent = "Starting runbook…";
       status.className = "";
 
       try {
-        const result = await startRunbook(prompt);
-        status.textContent = result?.message ?? "Runbook started successfully.";
-        status.className = "success";
+        const timeout = new Promise(resolve => setTimeout(() => resolve(null), 1000));
+        const result = await Promise.race([startRunbook(prompt, config), timeout]);
+
+        if (result === null) {
+          // Timed out — runbook is running in the extension
+          status.textContent = "Runbook is running in the Runbook AI extension.";
+          status.className = "success";
+        } else if (result?.error) {
+          status.textContent = result.message || result.error;
+          status.className = "error";
+        } else {
+          status.textContent = result?.message ?? "Runbook started successfully.";
+          status.className = "success";
+        }
       } catch (err) {
         console.error(err);
         status.textContent = "Failed to start runbook. Make sure the Runbook AI extension is installed and enabled.";
         status.className = "error";
       } finally {
-        btn.disabled = false;
+        runBtn.disabled = false;
       }
     });
   </script>
