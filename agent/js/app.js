@@ -5,20 +5,17 @@ import { gwConnect, gwDisconnect, gw } from './gateway.js';
 
 const fields = {
   botToken: document.getElementById('botToken'),
-  proxyUrl: document.getElementById('proxyUrl'),
 };
 
 // Populate form fields from persisted settings on load.
 (function initForm() {
   const s = loadSettings();
   fields.botToken.value = s.botToken ?? '';
-  fields.proxyUrl.value = s.proxyUrl ?? 'http://localhost:8082';
 })();
 
 document.getElementById('saveBtn').addEventListener('click', () => {
   saveSettings({
     botToken: fields.botToken.value.trim(),
-    proxyUrl: fields.proxyUrl.value.trim().replace(/\/$/, '') || 'http://localhost:8082',
   });
   const ok = document.getElementById('saveOk');
   ok.style.display = 'inline';

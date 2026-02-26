@@ -1,10 +1,10 @@
-import { getProxyUrl } from './settings.js';
+import { PROXY_URL } from './settings.js';
 
 const DISCORD_API = 'https://discord.com/api/v10';
 
-// Route Discord REST calls through the local CORS proxy.
+// Route Discord REST calls through the CORS proxy.
 function proxyFetch(targetUrl, opts = {}) {
-  return fetch(`${getProxyUrl()}?url=${encodeURIComponent(targetUrl)}`, opts);
+  return fetch(`${PROXY_URL}?url=${encodeURIComponent(targetUrl)}`, opts);
 }
 
 /**

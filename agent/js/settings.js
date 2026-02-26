@@ -12,8 +12,4 @@ export function saveSettings(s) {
 }
 
 
-/** Return the configured proxy URL (Discord REST only - no LLM). */
-export function getProxyUrl() {
-  const s = loadSettings();
-  return (s.proxyUrl || 'http://localhost:8082').replace(/\/$/, '');
-}
+export const PROXY_URL = 'https://proxy.runbookai.net';

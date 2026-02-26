@@ -12,11 +12,8 @@ COPY package.json server.js ./
 
 USER proxy
 
-EXPOSE 8080
+EXPOSE 8082
 
-ENV PORT=8080
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget -qO- http://localhost:${PORT}/ || exit 1
+ENV PORT=8082
 
 CMD ["node", "server.js"]
