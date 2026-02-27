@@ -4,18 +4,25 @@ import { gwConnect, gwDisconnect, gw } from './gateway.js';
 // -- Settings form -------------------------------------------------------------
 
 const fields = {
-  botToken: document.getElementById('botToken'),
+  botToken:     document.getElementById('botToken'),
+  allowedUsers: document.getElementById('allowedUsers'),
 };
 
 // Populate form fields from persisted settings on load.
 (function initForm() {
   const s = loadSettings();
-  fields.botToken.value = s.botToken ?? '';
+  fields.botToken.value     = s.botToken ?? '';
+  fields.allowedUsers.value = (s.allowedUsers ?? []).join('\n');
 })();
 
 document.getElementById('saveBtn').addEventListener('click', () => {
+  const users = fields.allowedUsers.value
+    .split('\n')
+    .map(u => u.trim().toLowerCase())
+    .filter(Boolean);
   saveSettings({
-    botToken: fields.botToken.value.trim(),
+    botToken:     fields.botToken.value.trim(),
+    allowedUsers: users,
   });
   const ok = document.getElementById('saveOk');
   ok.style.display = 'inline';

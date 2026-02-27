@@ -51,15 +51,31 @@ export async function openDMChannel(userId, token) {
 /**
  * Send a message to a Discord channel.
  * Splits content into <=1990-char chunks to stay under Discord's 2000-char limit.
+ * If replyToId is given, the first chunk is sent as a reply to that message.
  */
-export async function sendDiscordMessage(channelId, content, token) {
+export async function sendDiscordMessage(channelId, content, token, replyToId = null) {
   const chunks = [];
   for (let i = 0; i < content.length; i += 1990) {
     chunks.push(content.slice(i, i + 1990));
   }
-  for (const chunk of chunks) {
-    await discordPost(`/channels/${channelId}/messages`, { content: chunk }, token);
+  for (let i = 0; i < chunks.length; i++) {
+    const body = { content: chunks[i] };
+    if (i === 0 && replyToId) {
+      body.message_reference = { message_id: replyToId };
+    }
+    await discordPost(`/channels/${channelId}/messages`, body, token);
   }
+}
+
+/**
+ * Add a reaction to a message. emoji should be a URL-encoded unicode emoji e.g. '%F0%9F%91%80'.
+ * Fire-and-forget; errors are silently ignored.
+ */
+export function addReaction(channelId, messageId, emoji, token) {
+  proxyFetch(`${DISCORD_API}/channels/${channelId}/messages/${messageId}/reactions/${emoji}/@me`, {
+    method:  'PUT',
+    headers: { 'Authorization': `Bot ${token}` },
+  }).catch(() => {});
 }
 
 /**

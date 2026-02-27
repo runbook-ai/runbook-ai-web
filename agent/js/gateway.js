@@ -142,8 +142,7 @@ function onDispatch(event, data) {
       break;
 
     case 'RESUMED':
-      setStatus('connected', 'Connected (resumed)');
-      logSystem('Session resumed.');
+      // Keep showing 'Connected as ...' - don't flash a different message.
       break;
 
     case 'MESSAGE_CREATE':
@@ -164,7 +163,7 @@ export function gwConnect() {
     return;
   }
 
-  setStatus('connecting', 'Connecting...');
+  setStatus('connecting', '');
   setConnectBtn('Disconnect', 'btn-danger', true);
 
   // Prefer the resume URL from the last READY event (Discord requirement).
@@ -190,7 +189,7 @@ export function gwConnect() {
     // Auto-reconnect with exponential backoff (capped at 60 s).
     const delay = gw.reconnectDelay;
     logSystem(`Disconnected (code ${e.code}). Reconnecting in ${Math.round(delay / 1000)}s...`);
-    setStatus('connecting', `Reconnecting in ${Math.round(delay / 1000)}s...`);
+    setStatus('connecting', '');
     gw.reconnectTimer = setTimeout(() => {
       gw.reconnectTimer = null;
       gwConnect();

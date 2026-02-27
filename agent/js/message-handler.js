@@ -1,8 +1,50 @@
-import { loadSettings } from './settings.js';
+import { loadSettings, getAllowedUsers } from './settings.js';
 
 const EXTENSION_ID = 'kjbhngehjkiiecaflccjenmoccielojj';
 import { logMessage, logSystem, showProcessing, hideProcessing } from './ui.js';
-import { sendDiscordMessage, triggerTyping, openDMChannel } from './discord.js';
+import { sendDiscordMessage, triggerTyping, openDMChannel, addReaction } from './discord.js';
+
+// ── Task queue ──────────────────────────────────────────────────────────────
+// Each entry: { msg, channelId, prompt, config, s }
+// Tasks are processed one at a time because the extension can only handle
+// one runHeadlessTask at a time.
+const taskQueue = [];
+let queueRunning = false;
+
+/**
+ * Add a task to the queue and start processing if idle.
+ * Immediately adds a ⏳ reaction so the user knows their message was received.
+ */
+function enqueueTask(msg, channelId, prompt, config, s) {
+  taskQueue.push({ msg, channelId, prompt, config, s });
+  // Ack: message received and queued
+  addReaction(channelId, msg.id, '%F0%9F%91%8D', s.botToken); // 👍
+  if (!queueRunning) processQueue();
+}
+
+/**
+ * Drain the queue serially. For each task:
+ *   1. Add 👀 reaction — signals processing has started
+ *   2. Run the task via the extension
+ *   3. Continue to next task
+ */
+async function processQueue() {
+  if (queueRunning) return;
+  queueRunning = true;
+  while (taskQueue.length > 0) {
+    const { msg, channelId, prompt, config, s } = taskQueue.shift();
+    showProcessing(channelId);
+    triggerTyping(channelId, s.botToken);
+    try {
+      await runViaExtension(msg, channelId, prompt, config, s);
+    } finally {
+      hideProcessing();
+    }
+  }
+  queueRunning = false;
+}
+
+// ── Message handling ────────────────────────────────────────────────────────
 
 /**
  * Handle an incoming Discord MESSAGE_CREATE event.
@@ -16,6 +58,10 @@ export async function handleMessageCreate(msg, botUserId) {
   if (msg.guild_id) return;
   if (msg.author?.id === botUserId) return;
   if (msg.author?.bot) return;
+
+  // Allowlist check - ignore messages from unlisted users.
+  const allowedUsers = getAllowedUsers();
+  if (!allowedUsers.has(msg.author?.username?.toLowerCase())) return;
 
   // Empty content means MESSAGE_CONTENT intent is not enabled.
   if (!msg.content?.trim()) {
@@ -44,6 +90,17 @@ export async function handleMessageCreate(msg, botUserId) {
     logSystem(`Could not open DM channel: ${e.message}`, 'error-msg');
   }
 
+  // !help — reply immediately, no queue needed
+  if (/^!help\s*$/i.test(msg.content)) {
+    const help =
+      'Send me a message and I\'ll run it as a task.\n' +
+      '`!run <runbook>` - launch a saved runbook\n' +
+      '`!help` - show this message';
+    await sendDiscordMessage(channelId, help, s.botToken, msg.id);
+    logMessage({ channel_id: channelId, content: help }, 'outgoing');
+    return;
+  }
+
   // !run <runbook-name> [extra prompt text]
   const runMatch = msg.content.match(/^!run\s+(\S+)(.*)?$/i);
   if (runMatch) {
@@ -51,29 +108,16 @@ export async function handleMessageCreate(msg, botUserId) {
     return;
   }
 
-  // !help
-  if (/^!help\s*$/i.test(msg.content)) {
-    const help =
-      'Send me a message and I\'ll run it as a task.\n' +
-      '`!run <runbook>` - launch a saved runbook\n' +
-      '`!help` - show this message';
-    await sendDiscordMessage(channelId, help, s.botToken);
-    logMessage({ channel_id: channelId, content: help }, 'outgoing');
-    return;
-  }
-
-  // Free-form message - delegate to the Runbook AI extension.
-  showProcessing(channelId);
-  triggerTyping(channelId, s.botToken);
-  await runViaExtension(msg, channelId, msg.content, {}, s);
+  // Free-form message — enqueue for the extension to handle
+  enqueueTask(msg, channelId, msg.content, {}, s);
 }
 
 /**
  * Handle the `!run <runbook-name>` command.
- * Loads the runbook files and delegates execution to the Runbook AI extension.
+ * Fetches the runbook files then enqueues the task.
+ * Errors during fetch are reported immediately as a reply.
  */
 async function handleRunCommand(msg, channelId, runbookName, extraPrompt, s) {
-  showProcessing(channelId);
   try {
     const [mdRes, jsonRes] = await Promise.all([
       fetch(`/runbooks/${runbookName}.md`),
@@ -86,13 +130,10 @@ async function handleRunCommand(msg, channelId, runbookName, extraPrompt, s) {
 
     const prompt = (extraPrompt ? `${extraPrompt}\n\n` : '') + await mdRes.text();
     const config = jsonRes.ok ? JSON.parse(await jsonRes.text()) : {};
-    hideProcessing();
-
-    await runViaExtension(msg, channelId, prompt, config, s);
+    enqueueTask(msg, channelId, prompt, config, s);
   } catch (err) {
-    hideProcessing();
     logSystem(err.message, 'error-msg');
-    try { await sendDiscordMessage(channelId, `Error: ${err.message}`, s.botToken); } catch {}
+    try { await sendDiscordMessage(channelId, `Error: ${err.message}`, s.botToken, msg.id); } catch {}
   }
 }
 
@@ -100,26 +141,33 @@ async function handleRunCommand(msg, channelId, runbookName, extraPrompt, s) {
  * Send a prompt + config to the Runbook AI extension via chrome.runtime.sendMessage,
  * mirroring the startRunbook() pattern from the root index.html.
  * Notifies the Discord channel with the outcome.
+ * Called exclusively from processQueue — showProcessing/hideProcessing are
+ * managed by the caller.
  */
 async function runViaExtension(msg, channelId, prompt, config, s) {
-  console.log('[ext] chrome.runtime available:', typeof chrome !== 'undefined' && !!chrome.runtime);
+  const replyToId = msg.id;
+
+  // Tag errors that are caused by the extension not being present/responding
+  // so we can show the install hint only for those.
+  class ExtensionError extends Error {}
+
   try {
     if (typeof chrome === 'undefined' || !chrome.runtime) {
-      throw new Error('chrome.runtime not available on this page');
+      throw new ExtensionError('Runbook AI extension is not available on this page');
     }
 
     const openResp = await chrome.runtime.sendMessage(EXTENSION_ID, { action: 'openSidePanel' });
     console.log('[ext] openSidePanel response:', openResp);
-    if (openResp?.error) throw new Error(openResp.message || openResp.error);
+    if (openResp?.error) throw new ExtensionError(openResp.message || openResp.error);
 
     await new Promise(r => setTimeout(r, 500));
 
     const configResp = await chrome.runtime.sendMessage(EXTENSION_ID, {
       action: 'setRemoteConfig',
-      args:   { config },
+      args:   { config: { ...config, returnTaskState: true } },
     });
     console.log('[ext] setRemoteConfig response:', configResp);
-    if (configResp?.error) throw new Error(configResp.message || configResp.error);
+    if (configResp?.error) throw new ExtensionError(configResp.message || configResp.error);
 
     const taskResp = await chrome.runtime.sendMessage(EXTENSION_ID, {
       action: 'runHeadlessTask',
@@ -127,24 +175,34 @@ async function runViaExtension(msg, channelId, prompt, config, s) {
     });
     console.log('[ext] runHeadlessTask response:', taskResp);
 
-    hideProcessing();
-
     if (taskResp?.error) {
       throw new Error(taskResp.message || taskResp.error);
     }
 
+    // Switch back to the agent tab so it stays active for the next task.
+    // Match on origin+pathname prefix so trailing slashes / index.html variants all resolve.
+    const agentUrl = window.location.origin + window.location.pathname;
+    const agentTab = taskResp?.taskState?.tabs?.find(
+      t => t.url && (t.url === agentUrl || t.url.startsWith(agentUrl.replace(/\/[^/]*$/, '/')))
+    );
+    if (agentTab?.tabId != null) {
+      chrome.runtime.sendMessage(EXTENSION_ID, {
+        action: 'switchToTab',
+        args:   { tabId: agentTab.tabId },
+      }).catch(() => {});
+    }
+
     const reply = taskResp?.taskResult?.result || 'Task completed with no result.';
-    await sendDiscordMessage(channelId, reply, s.botToken);
+    await sendDiscordMessage(channelId, reply, s.botToken, replyToId);
     logMessage({ channel_id: channelId, content: reply }, 'outgoing');
 
   } catch (err) {
     console.error('[ext] runViaExtension failed:', err);
-    hideProcessing();
     const errText = err?.message ?? String(err);
-    const notice =
-      `Extension error: ${errText}\n\n` +
-      'Make sure the Runbook AI extension is installed and this page is open in Chrome.';
-    await sendDiscordMessage(channelId, notice, s.botToken).catch(() => {});
+    const notice = err instanceof ExtensionError
+      ? `Extension error: ${errText}\n\nMake sure the Runbook AI extension is installed and this page is open in Chrome.`
+      : `Error: ${errText}`;
+    await sendDiscordMessage(channelId, notice, s.botToken, replyToId).catch(() => {});
     logMessage({ channel_id: channelId, content: notice }, 'outgoing');
   }
 }

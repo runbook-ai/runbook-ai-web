@@ -43,13 +43,14 @@ export function appendLog(el) {
   container.scrollTop = container.scrollHeight;
 }
 
-/** Append a system/error notice to the log. */
+/** Append an error notice to the log. Connection/system messages are suppressed. */
 export function logSystem(msg, type = 'system-msg') {
+  if (type !== 'error-msg') return; // only errors go in the activity log
   const el = document.createElement('div');
   el.className = `log-entry ${type}`;
   el.innerHTML =
     `<div class="log-meta">` +
-    `<span class="log-author system">${type === 'error-msg' ? 'Error' : 'System'}</span>` +
+    `<span class="log-author system">Error</span>` +
     `<span>${new Date().toLocaleTimeString()}</span>` +
     `</div>` +
     `<div class="log-content">${escHtml(msg)}</div>`;

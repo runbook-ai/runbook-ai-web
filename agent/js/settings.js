@@ -13,3 +13,12 @@ export function saveSettings(s) {
 
 
 export const PROXY_URL = 'https://proxy.runbookai.net';
+
+/**
+ * Return the allowlist as a Set of lowercase usernames.
+ * An empty Set means allow everyone.
+ */
+export function getAllowedUsers() {
+  const s = loadSettings();
+  return new Set((s.allowedUsers ?? []).map(u => u.toLowerCase()));
+}
