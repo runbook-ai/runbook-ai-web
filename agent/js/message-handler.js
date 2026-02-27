@@ -200,7 +200,7 @@ async function runViaExtension(msg, channelId, prompt, config, s) {
     console.error('[ext] runViaExtension failed:', err);
     const errText = err?.message ?? String(err);
     const notice = err instanceof ExtensionError
-      ? `Extension error: ${errText}\n\nMake sure the Runbook AI extension is installed and this page is open in Chrome.`
+      ? `Extension error: ${errText}\n\nMake sure the Runbook AI extension side panel is opened.`
       : `Error: ${errText}`;
     await sendDiscordMessage(channelId, notice, s.botToken, replyToId).catch(() => {});
     logMessage({ channel_id: channelId, content: notice }, 'outgoing');
